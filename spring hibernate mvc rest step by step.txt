@@ -1,0 +1,496 @@
+spring rest + hibernate + angular curd application:
+--------------------------------------------------
+
+cheetsheet:
+-----------
+configure web.xml:
+-------------------
+
+
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://xmlns.jcp.org/xml/ns/javaee" xsi:schemaLocation="http://xmlns.jcp.org/xml/ns/javaee http://xmlns.jcp.org/xml/ns/javaee/web-app_3_1.xsd" version="3.1">
+  <display-name>empapp</display-name>
+  <servlet>
+    <servlet-name>springDispatcherServlet</servlet-name>
+    <servlet-class>org.springframework.web.servlet.DispatcherServlet</servlet-class>
+    <init-param>
+      <param-name>contextConfigLocation</param-name>
+      <param-value>/WEB-INF/web-config.xml</param-value>
+    </init-param>
+    <load-on-startup>1</load-on-startup>
+  </servlet>
+  <servlet-mapping>
+    <servlet-name>springDispatcherServlet</servlet-name>
+    <url-pattern>/api/*</url-pattern>
+  </servlet-mapping>
+  <context-param>
+    <param-name>contextConfigLocation</param-name>
+    <param-value>/WEB-INF/model-config.xml</param-value>
+  </context-param>
+  <listener>
+    <listener-class>org.springframework.web.context.ContextLoaderListener</listener-class>
+  </listener>
+</web-app>
+
+
+
+
+
+
+configure web-config.xml:
+--------------------------
+
+
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:mvc="http://www.springframework.org/schema/mvc"
+	xsi:schemaLocation="http://www.springframework.org/schema/mvc http://www.springframework.org/schema/mvc/spring-mvc-4.3.xsd
+		http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-4.3.xsd">
+	<!-- web layer === model layer  -->
+	<mvc:annotation-driven/>
+	<context:component-scan base-package="com.empapp.web.controller"/>
+	<!-- view resolver -->
+	<!-- <bean class="org.springframework.web.servlet.view.InternalResourceViewResolver">
+		<property name="prefix" value="/WEB-INF/views/"/>
+		<property name="suffix" value=".jsp"/>
+	</bean> -->
+</beans>
+
+
+configure model-config.xml:
+--------------------------
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:tx="http://www.springframework.org/schema/tx"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+		http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-4.3.xsd
+		http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx-4.3.xsd">
+
+	<context:component-scan base-package="com.empapp.model"/>
+	<bean id="ds" class="org.springframework.jdbc.datasource.DriverManagerDataSource">
+	    <property name="url" value="${db.url}" />
+		<property name="driverClassName" value="${db.drivername}" />
+		<property name="username" value="${db.username}" />
+		<property name="password" value="${db.password}" />
+	</bean>
+	<context:property-placeholder location="classpath:db.properties"/>
+	<bean id="sf" class="org.springframework.orm.hibernate5.LocalSessionFactoryBean">
+		<property name="dataSource" ref="ds"/>
+		
+		<property name="hibernateProperties">
+			<props>
+				<prop key="hibernate.hbm2ddl.auto">update</prop>
+				<prop key="hibernate.dialect">org.hibernate.dialect.MySQL57Dialect</prop>
+				<prop key="hibernate.show_sql">true</prop>
+				<prop key="hibernate.format_sql">true</prop>
+			</props>
+		</property>
+	<property name="packagesToScan">
+		<list>
+			<value>com.empapp.model.dao</value>
+		</list>
+	</property>
+	</bean>
+
+	<bean id="tm" class="org.springframework.orm.hibernate5.HibernateTransactionManager">
+		<property name="sessionFactory" ref="sf"/>
+	</bean>
+	
+	<tx:annotation-driven transaction-manager="tm"/>
+</beans>
+
+
+
+db.properties:
+-------------
+
+db.url=jdbc:mysql://localhost:3306/hcl_batch3_mode2
+db.drivername=com.mysql.jdbc.Driver
+db.username=root
+db.password=root
+
+
+dao layer:
+========
+@Entity
+@Table(name="emp_table")
+public class Employee {
+	@Id
+	@GeneratedValue(strategy=GenerationType.IDENTITY)
+	private int id;
+	private String name;
+	private int age;
+}
+
+
+public interface EmployeeDao {
+	public List<Employee> getAll();
+	public Employee getEmployeeById(int id);
+	public Employee save(Employee emp);
+	public Employee delete(int empId);
+	public Employee update(int empId, Employee emp);
+}
+
+
+@Repository
+public class EmployeeDaoImpl implements EmployeeDao{
+
+	private SessionFactory factory;
+	
+	@Autowired
+	public EmployeeDaoImpl(SessionFactory factory) {
+		this.factory = factory;
+	}
+
+	private Session getSession() {
+		return factory.getCurrentSession();
+	}
+	@Override
+	public List<Employee> getAll() {
+		return getSession().createQuery("select e from Employee e").list();
+	}
+
+	@Override
+	public Employee getEmployeeById(int id) {
+		Employee employee=getSession().find(Employee.class, id);
+		if(employee==null)
+			throw new EmployeeNotFoundException("emp with id="+ id + " is not found");
+		return employee;
+	}
+
+	@Override
+	public Employee save(Employee emp) {
+		 getSession().save(emp);
+		 return emp;//this return object have auto gen key
+	}
+
+	@Override
+	public Employee delete(int empId) {
+		Employee empToDelete=getEmployeeById(empId);
+		getSession().delete(empToDelete);
+		return empToDelete;
+	}
+
+	@Override
+	public Employee update(int empId, Employee emp) {
+		Employee empToUpdate=getEmployeeById(empId);
+		empToUpdate.setAge(emp.getAge());
+		empToUpdate.setName(emp.getName());
+		getSession().merge(empToUpdate);
+		return empToUpdate;
+	}
+
+}
+
+
+
+public class EmployeeNotFoundException extends RuntimeException{
+	private static final long serialVersionUID = -9015120434992369254L;
+
+	public EmployeeNotFoundException(String message) {
+		super(message);
+	}
+}
+
+
+
+service layer:
+------------
+
+public interface EmployeeService {
+	public List<Employee> getAll();
+	public Employee getEmployeeById(int id);
+	public Employee save(Employee emp);
+	public Employee delete(int empId);
+	public Employee update(int empId, Employee emp);
+}
+
+
+
+
+
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+@Transactional
+public class EmployeeServiceImpl implements EmployeeService {
+
+	private EmployeeDao employeeDao;
+	
+	@Autowired
+	public EmployeeServiceImpl(EmployeeDao employeeDao) {
+		this.employeeDao = employeeDao;
+	}
+
+	@Override
+	public List<Employee> getAll() {
+		return employeeDao.getAll();
+	}
+
+	@Override
+	public Employee getEmployeeById(int id) {
+		return employeeDao.getEmployeeById(id);
+	}
+
+	@Override
+	public Employee save(Employee emp) {
+		return employeeDao.save(emp);
+	}
+
+	@Override
+	public Employee delete(int empId) {
+		return employeeDao.delete(empId);
+	}
+
+	@Override
+	public Employee update(int empId, Employee emp) {
+		return employeeDao.update(empId, emp);
+	}
+
+}
+
+
+
+@CrossOrigin(origins = "*")
+@RestController //@Controller+@ResponseBody
+public class EmployeeRestController {
+
+	private EmployeeService employeeService;
+	
+	/*@PostConstruct
+	public void init() {
+		Employee e1=new Employee("raj", 40);
+		Employee e2=new Employee("ekta", 38);
+		employeeService.save(e1);
+		employeeService.save(e2);
+		
+	}*/
+	@Autowired
+	public EmployeeRestController(EmployeeService employeeService) {
+		this.employeeService = employeeService;
+	}
+	// ResponseEntity (GPP)= response + http status code
+	@GetMapping("employee")
+	public ResponseEntity<List<Employee>> getAllEmp(){
+		List<Employee> employees=employeeService.getAll();
+		return new ResponseEntity<List<Employee>>(employees, HttpStatus.OK);
+	}
+	@GetMapping(path="employee/{id}")
+	public Employee getEmployeeById(@PathVariable(name="id") int empId) {
+		Employee employee= employeeService.getEmployeeById(empId);
+		return employee;
+	}
+	
+	//post operation
+	@PostMapping(path="employee")
+	public ResponseEntity<Employee> addEmployee(@RequestBody Employee emp) {
+		Employee employee2=employeeService.save(emp);
+		return new ResponseEntity<Employee>(employee2, HttpStatus.CREATED);
+	}
+	
+	//update
+	@PutMapping(path="employee/{id}")
+	public Employee updateEmployee(@RequestBody Employee emp, @PathVariable(name="id") int empId) {
+		Employee employee= employeeService.update(empId, emp);
+		return employee;
+	}
+	
+	//delete
+	@DeleteMapping(path="employee/{id}", produces=MediaType.APPLICATION_JSON_VALUE)
+	public Employee deleteEmployee(@PathVariable(name="id") int empId) {
+		Employee employee= employeeService.delete(empId);
+		return employee;
+	}
+	
+}
+
+
+
+//test on postman
+
+
+
+pom.xml:
+---------
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<groupId>com.empapp</groupId>
+	<artifactId>empapp</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
+	<packaging>war</packaging>
+	<properties>
+		<failOnMissingWebXml>false</failOnMissingWebXml>
+		<maven.compiler.source>1.8</maven.compiler.source>
+		<maven.compiler.target>1.8</maven.compiler.target>
+		<org.springframework.version>5.2.9.RELEASE</org.springframework.version>
+		<jdbc.mysql.version>5.1.47</jdbc.mysql.version>
+	</properties>
+
+	<dependencies>
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-context</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-core</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-jdbc</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-orm</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-test</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-tx</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-web</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-webmvc</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>jstl</groupId>
+			<artifactId>jstl</artifactId>
+			<version>1.2</version>
+		</dependency>
+		<dependency>
+			<groupId>org.aspectj</groupId>
+			<artifactId>aspectjweaver</artifactId>
+			<version>1.8.1</version>
+		</dependency>
+
+		<dependency>
+			<groupId>org.aspectj</groupId>
+			<artifactId>aspectjrt</artifactId>
+			<version>1.6.9</version>
+		</dependency>
+
+		<dependency>
+			<groupId>commons-dbcp</groupId>
+			<artifactId>commons-dbcp</artifactId>
+			<version>1.4</version>
+		</dependency>
+
+		<dependency>
+			<groupId>joda-time</groupId>
+			<artifactId>joda-time</artifactId>
+			<version>2.7</version>
+		</dependency>
+
+		<!-- json parser spring rest -->
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-databind</artifactId>
+			<version>2.9.4</version>
+		</dependency>
+
+		<dependency>
+			<groupId>junit</groupId>
+			<artifactId>junit</artifactId>
+			<version>4.12</version>
+			<scope>test</scope>
+		</dependency>
+
+		<!-- bean validation jsr 303 -->
+		<dependency>
+			<groupId>org.hibernate</groupId>
+			<artifactId>hibernate-validator</artifactId>
+			<version>5.1.0.Final</version>
+		</dependency>
+
+		<!-- hibernate dependency -->
+		<dependency>
+			<groupId>org.hibernate</groupId>
+			<artifactId>hibernate-core</artifactId>
+			<version>5.2.9.Final</version>
+		</dependency>
+
+		<!-- hibernate depends on jboss logging -->
+		<dependency>
+			<groupId>org.jboss.logging</groupId>
+			<artifactId>jboss-logging</artifactId>
+			<version>3.3.0.Final</version>
+		</dependency>
+
+		<!-- log4j2 -->
+		<dependency>
+			<groupId>org.apache.logging.log4j</groupId>
+			<artifactId>log4j-api</artifactId>
+			<version>2.7</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.logging.log4j</groupId>
+			<artifactId>log4j-core</artifactId>
+			<version>2.7</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.logging.log4j</groupId>
+			<artifactId>log4j-slf4j-impl</artifactId>
+			<version>2.7</version>
+		</dependency>
+
+		<dependency>
+			<groupId>mysql</groupId>
+			<artifactId>mysql-connector-java</artifactId>
+			<version>${jdbc.mysql.version}</version>
+		</dependency>
+		<!-- what is the need? -->
+		<dependency>
+			<groupId>javax</groupId>
+			<artifactId>javaee-web-api</artifactId>
+			<version>8.0</version>
+			<scope>provided</scope>
+		</dependency>
+	</dependencies>
+
+
+	<build>
+		<finalName>empapp</finalName>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.tomcat.maven</groupId>
+				<artifactId>tomcat9-maven-plugin</artifactId>
+				<version>2.2</version>
+			</plugin>
+		</plugins>
+	</build>
+
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>org.springframework</groupId>
+				<artifactId>spring-framework-bom</artifactId>
+				<version>${org.springframework.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+</project>
+
+
+
